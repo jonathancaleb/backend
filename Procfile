@@ -1,0 +1,1 @@
+web: cd /opt/render/project/src && gunicorn eld_project.wsgi:application --bind 0.0.0.0:$PORT

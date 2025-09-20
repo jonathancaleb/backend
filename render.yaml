@@ -2,8 +2,10 @@ services:
   - type: web
     name: eld-backend
     env: python
+    plan: free
+    region: oregon
     buildCommand: "./build.sh"
-    startCommand: "gunicorn eld_project.wsgi:application"
+    startCommand: "gunicorn eld_project.wsgi:application --host 0.0.0.0 --port $PORT"
     envVars:
       - key: DEBUG
         value: false
