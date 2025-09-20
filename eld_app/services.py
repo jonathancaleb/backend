@@ -58,12 +58,19 @@ class RouteService:
 
         # Fallback to simple calculation
         distance = RouteService.calculate_distance(start_lat, start_lng, end_lat, end_lng)
-        # Estimate driving time at 55 mph average
-        duration = distance / 55
+        # Estimate driving time at realistic speeds:
+        # - Urban/short distance: 45 mph average
+        # - Long distance highway: 60 mph average
+        if distance < 50:
+            avg_speed = 45  # Urban driving
+        else:
+            avg_speed = 60  # Highway driving
+        
+        duration = distance / avg_speed
 
         return {
-            'distance_miles': distance,
-            'duration_hours': duration,
+            'distance_miles': round(distance, 2),
+            'duration_hours': round(duration, 2),
             'geometry': None
         }
 
@@ -138,6 +145,19 @@ class HOSService:
         current_duty_time = 0
         order = start_order
 
+        # If the trip is short (under 8 hours), don't add mandatory rest periods
+        if duration <= 8 and distance <= 550:  # Under 8 hours and 550 miles
+            # Just add the driving segment without mandatory breaks
+            segments.append({
+                'start_location': start_loc,
+                'end_location': end_loc,
+                'distance_miles': distance,
+                'duration_hours': duration,
+                'segment_type': 'driving',
+                'order': order
+            })
+            return segments
+
         while remaining_distance > 0:
             # Check if we need a 30-minute break (after 8 hours of driving)
             if current_driving_time >= 8:
@@ -153,8 +173,8 @@ class HOSService:
                 current_driving_time = 0
                 current_duty_time += 0.5
 
-            # Check if we need a 10-hour rest period
-            if current_duty_time >= 14 or current_cycle >= 70:
+            # Check if we need a 10-hour rest period (only for long trips)
+            if current_duty_time >= 14:
                 segments.append({
                     'start_location': f"Rest area near {start_loc}",
                     'end_location': f"Rest area near {start_loc}",
@@ -166,47 +186,38 @@ class HOSService:
                 order += 1
                 current_driving_time = 0
                 current_duty_time = 0
-                current_cycle = 0  # Reset after 34-hour restart (simplified)
 
             # Calculate how much we can drive before next break/rest
-            max_driving = min(11 - current_driving_time, 8)  # 11-hour limit, 8 before break
+            max_driving_before_break = 8 - current_driving_time
+            max_driving_daily = 11 - current_driving_time
             max_duty = 14 - current_duty_time
 
-            driving_time = min(remaining_duration, max_driving, max_duty)
-            segment_distance = (driving_time / duration) * distance if duration > 0 else 0
+            # Use the most restrictive limit
+            max_driving = min(max_driving_before_break, max_driving_daily, max_duty, remaining_duration)
 
-            # Add fuel stop if needed (every 1000 miles)
-            total_driven = distance - remaining_distance
-            if total_driven > 0 and int(total_driven) % 1000 < int(total_driven + segment_distance) % 1000:
-                segments.append({
-                    'start_location': f"Fuel stop near {start_loc}",
-                    'end_location': f"Fuel stop near {start_loc}",
-                    'distance_miles': 0,
-                    'duration_hours': 0.5,
-                    'segment_type': 'fuel',
-                    'order': order
-                })
-                order += 1
-                current_duty_time += 0.5
+            if max_driving <= 0:
+                continue
+
+            # Calculate distance for this driving segment
+            segment_distance = min(remaining_distance, (max_driving / duration) * distance if duration > 0 else remaining_distance)
 
             # Add driving segment
             segments.append({
                 'start_location': start_loc,
-                'end_location': end_loc if remaining_distance <= segment_distance else f"En route to {end_loc}",
-                'distance_miles': segment_distance,
-                'duration_hours': driving_time,
+                'end_location': end_loc if segment_distance >= remaining_distance else f"En route to {end_loc}",
+                'distance_miles': round(segment_distance, 2),
+                'duration_hours': round(max_driving, 2),
                 'segment_type': 'driving',
                 'order': order
             })
 
             remaining_distance -= segment_distance
-            remaining_duration -= driving_time
-            current_driving_time += driving_time
-            current_duty_time += driving_time
-            current_cycle += driving_time
+            remaining_duration -= max_driving
+            current_driving_time += max_driving
+            current_duty_time += max_driving
             order += 1
 
-            if remaining_distance <= 0:
+            if remaining_distance <= 0.1:  # Small threshold to avoid rounding errors
                 break
 
         return segments
