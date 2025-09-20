@@ -4,8 +4,8 @@ services:
     env: python
     plan: free
     region: oregon
-    buildCommand: "./build.sh"
-    startCommand: "gunicorn eld_project.wsgi:application --bind 0.0.0.0:$PORT"
+    buildCommand: "pip install -r requirements.txt && python manage.py collectstatic --no-input"
+    startCommand: "bash startup.sh"
     envVars:
       - key: DEBUG
         value: false
