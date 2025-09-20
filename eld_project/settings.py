@@ -9,10 +9,10 @@ SECRET_KEY = config('SECRET_KEY', default='django-insecure-dev-key')
 DEBUG = config('DEBUG', default=True, cast=bool)
 
 ALLOWED_HOSTS = [
-    'localhost',
-    '127.0.0.1',
-    '.render.com',  # Allow all Render subdomains
-    config('ALLOWED_HOST', default=''),
+    "backend-8w5l.onrender.com",   # Your Render backend URL
+    "frontend-1an4thdph-calebdev.vercel.app",  # Your Vercel frontend URL (for API calls)
+    "localhost",
+    "127.0.0.1",
 ]
 
 if config('ALLOWED_HOST', default=''):
